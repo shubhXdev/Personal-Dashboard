@@ -105,11 +105,9 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Authentication Logic ---
 
     loginBtn.addEventListener('click', () => {
-        console.log("Attempting login from domain:", window.location.hostname);
-        console.log("Firebase Auth Domain:", firebaseConfig.authDomain);
         signInWithPopup(auth, provider).catch((error) => {
-            console.error("Login failed full object:", error);
-            alert(`Login failed: ${error.code}\nDomain detected: ${window.location.hostname}\nMessage: ${error.message}`);
+            console.error("Login failed", error);
+            alert("Login failed: " + error.message);
         });
     });
 
@@ -690,4 +688,62 @@ document.addEventListener('DOMContentLoaded', () => {
             else alert('Notifications not granted.');
         });
     }
+
+    // --- Local Notification Scheduler ---
+    class NotificationScheduler {
+        constructor() {
+            this.lastWaterHour = new Date().getHours();
+            this.measurementTriggered = false;
+        }
+
+        start() {
+            setInterval(() => this.check(), 60000); // Check every minute
+            this.check();
+        }
+
+        check() {
+            const now = new Date();
+            const hour = now.getHours();
+            const min = now.getMinutes();
+
+            // Water Reminder: Hourly on the 0th minute (7 AM - 11 PM)
+            if (hour !== this.lastWaterHour) {
+                this.lastWaterHour = hour;
+                if (hour >= 7 && hour <= 23) {
+                    this.sendNotification('💧 Hydration Check', 'Time to drink your hourly glass of water!');
+                }
+            }
+
+            // Measurement Reminder: 11:00 PM (23:00)
+            if (hour === 23 && min === 0) {
+                if (!this.measurementTriggered) {
+                    this.sendNotification('📏 Measurement Time', 'Please record your waist and weight for today.');
+                    this.measurementTriggered = true;
+                }
+            } else if (hour !== 23) {
+                this.measurementTriggered = false;
+            }
+        }
+
+        sendNotification(title, body) {
+            if (!("Notification" in window) || Notification.permission !== "granted") return;
+
+            // Try Service Worker registration first
+            if (navigator.serviceWorker && navigator.serviceWorker.ready) {
+                navigator.serviceWorker.ready.then(registration => {
+                    registration.showNotification(title, {
+                        body: body,
+                        icon: 'logo.png',
+                        badge: 'logo.png',
+                        vibrate: [200, 100, 200]
+                    });
+                });
+            } else {
+                new Notification(title, { body, icon: 'logo.png' });
+            }
+        }
+    }
+
+    const scheduler = new NotificationScheduler();
+    scheduler.start();
 });
