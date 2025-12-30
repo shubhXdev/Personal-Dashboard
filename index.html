@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Midnight Spark | Personal Dashboard</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="manifest" href="manifest.json">
+</head>
+
+<body>
+    <div class="bg-glow"></div>
+    <div class="blob-container">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <main id="app">
+        <!-- Dashboard Screen -->
+        <section id="dashboard" class="screen active">
+            <header>
+                <div class="welcome">
+                    <img id="site-logo" src="logo.png" alt="Logo" />
+                    <div>
+                        <h1 id="greeting" class="animate-text">Good Evening, Shubham</h1>
+                        <p id="current-date" class="animate-text-slow"></p>
+                    </div>
+                </div>
+                <div style="display:flex;gap:0.6rem;align-items:center;">
+                    <button id="log-entry-btn" class="btn-primary glow-pulse">Daily Reflection</button>
+                    <button id="enable-reminders-btn" class="btn-secondary">Enable Reminders</button>
+                </div>
+            </header>
+
+            <nav class="report-tabs">
+                <button class="tab-btn active" data-range="yesterday">Yesterday</button>
+                <button class="tab-btn" data-range="weekly">Weekly</button>
+                <button class="tab-btn" data-range="monthly">Monthly</button>
+            </nav>
+
+            <div class="stats-grid">
+                <div class="category-cards" id="category-summary">
+                    <!-- Cards will be injected by JS -->
+                </div>
+                <div class="chart-container glass">
+                    <div class="report-header">
+                        <h3>Overall Progress</h3>
+                        <div class="report-highlights">
+                            <div class="highlight-item">
+                                <span class="h-label">Consistency</span>
+                                <span class="h-val" id="consistency-val">85%</span>
+                            </div>
+                            <div class="highlight-item">
+                                <span class="h-label">Streak</span>
+                                <span class="h-val" id="streak-val">5 Days</span>
+                            </div>
+                            <!-- Mini meters shown for weekly/monthly ranges only (populated by JS) -->
+                            <div class="mini-meters" id="mini-meters" style="display:none;">
+                                <div class="mini-meter">
+                                    <div class="circular-meter small discipline">
+                                        <svg viewBox="0 0 36 36">
+                                            <path class="circle-bg"
+                                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                            <path id="mini-discipline-meter-fill" class="circle-fill"
+                                                stroke-dasharray="0, 100"
+                                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                        </svg>
+                                        <div class="meter-val-wrap">
+                                            <span id="mini-discipline-val" class="meter-val">0%</span>
+                                            <span class="meter-label">Discipline</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="mini-meter">
+                                    <div class="circular-meter small consistency">
+                                        <svg viewBox="0 0 36 36">
+                                            <path class="circle-bg"
+                                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                            <path id="mini-consistency-meter-fill" class="circle-fill"
+                                                stroke-dasharray="0, 100"
+                                                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                                        </svg>
+                                        <div class="meter-val-wrap">
+                                            <span id="mini-range-consistency-val" class="meter-val">0%</span>
+                                            <span class="meter-label">Consistency</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            <!-- Biometric Charts (Weekly/Monthly) -->
+                            <div class="biometric-charts" id="biometric-charts" style="display:none;">
+                                <div class="bio-chart-wrapper">
+                                    <canvas id="weightChart"></canvas>
+                                </div>
+                                <div class="bio-chart-wrapper">
+                                    <canvas id="waistChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="range-metrics-container" class="range-metrics" style="display: none;">
+                        <!-- Large meters removed; mini meters are shown in the report header for weekly/monthly -->
+                    </div>
+                    <div id="heatmapContainer" class="heatmap-container"></div>
+                </div>
+                <div id="missed-habits-section" class="missed-habits-container glass" style="display: none;">
+                    <div class="report-header">
+                        <div class="ai-title-wrap">
+                            <span class="ai-badge">AI ANALYTICS</span>
+                            <h3>Intelligence Report</h3>
+                        </div>
+                        <div class="ai-metric">
+                            <span class="metric-label">Efficiency</span>
+                            <span id="ai-performance-val" class="metric-val">0%</span>
+                        </div>
+                    </div>
+                    <div class="ai-briefing">
+                        <p id="ai-insight-text" class="ai-insight-prose">Analyzing your metrics for yesterday...</p>
+                    </div>
+                    <div id="missed-habits-list" class="missed-habits-grid">
+                        <!-- Missed habits will be injected by JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Form Screen -->
+        <section id="log-form" class="screen">
+            <header>
+                <button id="back-to-dash" class="btn-secondary">← Back to Dashboard</button>
+                <h1>Midnight Reflection</h1>
+                <p>How was your journey today?</p>
+            </header>
+
+            <form id="daily-form" class="glass">
+                <div class="input-group date-group">
+                    <label for="entry-date">Entry Date</label>
+                    <input type="date" id="entry-date" name="entryDate" />
+                    <small class="date-help">Leave empty to save for today</small>
+                </div>
+                <!-- Night Log Section -->
+                <div class="form-section">
+                    <h2 class="section-title">🌙 Night Log</h2>
+                    <div class="form-grid">
+                        <div class="toggle-group">
+                            <label>Reading</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="reading-no" name="reading" value="false" checked>
+                                <label for="reading-no" class="btn-no">No</label>
+                                <input type="radio" id="reading-yes" name="reading" value="true">
+                                <label for="reading-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Meditation</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="meditation-no" name="meditation" value="false" checked>
+                                <label for="meditation-no" class="btn-no">No</label>
+                                <input type="radio" id="meditation-yes" name="meditation" value="true">
+                                <label for="meditation-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Facial Massage</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="facialMassage-no" name="facialMassage" value="false" checked>
+                                <label for="facialMassage-no" class="btn-no">No</label>
+                                <input type="radio" id="facialMassage-yes" name="facialMassage" value="true">
+                                <label for="facialMassage-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Scalp Massage</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="scalpMassage-no" name="scalpMassage" value="false" checked>
+                                <label for="scalpMassage-no" class="btn-no">No</label>
+                                <input type="radio" id="scalpMassage-yes" name="scalpMassage" value="true">
+                                <label for="scalpMassage-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Night Pills</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="nightPills-no" name="nightPills" value="false" checked>
+                                <label for="nightPills-no" class="btn-no">No</label>
+                                <input type="radio" id="nightPills-yes" name="nightPills" value="true">
+                                <label for="nightPills-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Day Pills</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="dayPills-no" name="dayPills" value="false" checked>
+                                <label for="dayPills-no" class="btn-no">No</label>
+                                <input type="radio" id="dayPills-yes" name="dayPills" value="true">
+                                <label for="dayPills-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Soaked Nutrishot</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="soakedNutrishot-no" name="soakedNutrishot" value="false"
+                                    checked>
+                                <label for="soakedNutrishot-no" class="btn-no">No</label>
+                                <input type="radio" id="soakedNutrishot-yes" name="soakedNutrishot" value="true">
+                                <label for="soakedNutrishot-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Drunk 3 Ltrs Water</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="water3Ltrs-no" name="water3Ltrs" value="false" checked>
+                                <label for="water3Ltrs-no" class="btn-no">No</label>
+                                <input type="radio" id="water3Ltrs-yes" name="water3Ltrs" value="true">
+                                <label for="water3Ltrs-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Biometrics Section -->
+                <div class="form-section">
+                    <h2 class="section-title">⚖️ Biometrics</h2>
+                    <div class="form-grid" style="grid-template-columns: 1fr 1fr;">
+                        <div class="input-group">
+                            <label for="weight-input">Weight (kg)</label>
+                            <input type="number" step="0.1" id="weight-input" name="weight" placeholder="e.g. 75.5"
+                                class="glass-input">
+                        </div>
+                        <div class="input-group">
+                            <label for="waist-input">Waist (in)</label>
+                            <input type="number" step="0.1" id="waist-input" name="waist" placeholder="e.g. 32.0"
+                                class="glass-input">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Day Log Section -->
+                <div class="form-section">
+                    <h2 class="section-title">☀️ Day Log</h2>
+                    <div class="form-grid">
+                        <div class="toggle-group">
+                            <label>Workout</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="workout-no" name="workout" value="false" checked>
+                                <label for="workout-no" class="btn-no">No</label>
+                                <input type="radio" id="workout-yes" name="workout" value="true">
+                                <label for="workout-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Brush Teeth</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="brushTeeth-no" name="brushTeeth" value="false" checked>
+                                <label for="brushTeeth-no" class="btn-no">No</label>
+                                <input type="radio" id="brushTeeth-yes" name="brushTeeth" value="true">
+                                <label for="brushTeeth-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Bath</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="bath-no" name="bath" value="false" checked>
+                                <label for="bath-no" class="btn-no">No</label>
+                                <input type="radio" id="bath-yes" name="bath" value="true">
+                                <label for="bath-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Take NutriShot</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="takeNutrishot-no" name="takeNutrishot" value="false" checked>
+                                <label for="takeNutrishot-no" class="btn-no">No</label>
+                                <input type="radio" id="takeNutrishot-yes" name="takeNutrishot" value="true">
+                                <label for="takeNutrishot-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Boiled Daal</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="boiledDaal-no" name="boiledDaal" value="false" checked>
+                                <label for="boiledDaal-no" class="btn-no">No</label>
+                                <input type="radio" id="boiledDaal-yes" name="boiledDaal" value="true">
+                                <label for="boiledDaal-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Tea/Coffee</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="teaCoffee-no" name="teaCoffee" value="false" checked>
+                                <label for="teaCoffee-no" class="btn-no">No</label>
+                                <input type="radio" id="teaCoffee-yes" name="teaCoffee" value="true">
+                                <label for="teaCoffee-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>News</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="news-no" name="news" value="false" checked>
+                                <label for="news-no" class="btn-no">No</label>
+                                <input type="radio" id="news-yes" name="news" value="true">
+                                <label for="news-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Situation Practice</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="situationPractice-no" name="situationPractice" value="false"
+                                    checked>
+                                <label for="situationPractice-no" class="btn-no">No</label>
+                                <input type="radio" id="situationPractice-yes" name="situationPractice" value="true">
+                                <label for="situationPractice-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                        <div class="toggle-group">
+                            <label>Maths & Aptitude</label>
+                            <div class="yes-no-switch">
+                                <input type="radio" id="mathsAptitude-no" name="mathsAptitude" value="false" checked>
+                                <label for="mathsAptitude-no" class="btn-no">No</label>
+                                <input type="radio" id="mathsAptitude-yes" name="mathsAptitude" value="true">
+                                <label for="mathsAptitude-yes" class="btn-yes">Yes</label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="input-group full-width">
+                    <label>Day Reflection Notes</label>
+                    <textarea name="notes"
+                        placeholder="Write down your day reflection, thoughts, and insights..."></textarea>
+                </div>
+                <div style="display:flex;gap:0.6rem;align-items:center;">
+                    <button type="submit" class="btn-submit">Save Journey</button>
+                    <button id="sync-to-sheet-btn" type="button" class="btn-secondary">Sync to Google Sheet</button>
+                </div>
+            </form>
+        </section>
+    </main>
+
+    <script src="script.js"></script>
+</body>
+
+</html>
