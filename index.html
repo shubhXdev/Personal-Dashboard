@@ -32,8 +32,47 @@
                         <p id="current-date" class="animate-text-slow"></p>
                     </div>
                 </div>
-                <div style="display:flex;gap:0.6rem;align-items:center;">
-                    <button id="log-entry-btn" class="btn-primary glow-pulse">Daily Reflection</button>
+                <!-- Auth & Actions -->
+                <style>
+                    /* Inline style for auth container */
+                    .auth-container {
+                        display: flex;
+                        gap: 1rem;
+                        align-items: center;
+                    }
+
+                    .user-profile {
+                        display: flex;
+                        align-items: center;
+                        gap: 0.5rem;
+                        background: rgba(255, 255, 255, 0.1);
+                        padding: 0.3rem 0.8rem;
+                        border-radius: 2rem;
+                        border: 1px solid rgba(255, 255, 255, 0.2);
+                    }
+
+                    .user-avatar {
+                        width: 24px;
+                        height: 24px;
+                        border-radius: 50%;
+                    }
+
+                    #user-name {
+                        font-size: 0.9rem;
+                        color: #fff;
+                    }
+                </style>
+                <div class="auth-container">
+                    <div id="user-info" class="user-profile" style="display:none;">
+                        <img id="user-avatar" class="user-avatar" src="" alt="User" />
+                        <span id="user-name"></span>
+                        <button id="logout-btn" class="btn-secondary"
+                            style="font-size:0.8rem; padding: 0.2rem 0.6rem;">Logout</button>
+                    </div>
+                    <button id="login-btn" class="btn-primary glow-pulse" style="display:none;">Sign In</button>
+
+                    <button id="log-entry-btn" class="btn-primary glow-pulse" style="display:none;">Daily
+                        Reflection</button>
                     <button id="enable-reminders-btn" class="btn-secondary">Enable Reminders</button>
                 </div>
             </header>
@@ -343,7 +382,7 @@
         </section>
     </main>
 
-    <script src="script.js"></script>
+    <script type="module" src="script.js"></script>
 </body>
 
 </html>

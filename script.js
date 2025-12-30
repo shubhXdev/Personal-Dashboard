@@ -1,3 +1,34 @@
+
+// Import Firebase SDKs
+import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-app.js";
+import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-analytics.js";
+import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-auth.js";
+import { getFirestore, collection, doc, setDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.2/firebase-firestore.js";
+
+// Firebase Configuration
+const firebaseConfig = {
+    apiKey: "AIzaSyDTPrHsUl4p9Rr6bt6Z5t2xCoK0uiEHb5c",
+    authDomain: "shubham-dashboard.firebaseapp.com",
+    projectId: "shubham-dashboard",
+    storageBucket: "shubham-dashboard.firebasestorage.app",
+    messagingSenderId: "405197756044",
+    appId: "1:405197756044:web:f320033b39769a28340da9",
+    measurementId: "G-N99BTMN01Z"
+};
+
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const analytics = getAnalytics(app);
+const auth = getAuth(app);
+const db = getFirestore(app);
+const provider = new GoogleAuthProvider();
+
+// Private State
+let currentUser = null;
+let entriesCache = [];
+let unsubscribeValues = null;
+
+// DOMContentLoaded Wrapper
 document.addEventListener('DOMContentLoaded', () => {
     // DOM Elements
     const dashboard = document.getElementById('dashboard');
@@ -9,7 +40,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const greeting = document.getElementById('greeting');
     const currentDateDisplay = document.getElementById('current-date');
 
-
+    // Auth UI Elements
+    const loginBtn = document.getElementById('login-btn');
+    const logoutBtn = document.getElementById('logout-btn');
+    const userInfo = document.getElementById('user-info');
+    const userNameDisplay = document.getElementById('user-name');
+    const userAvatar = document.getElementById('user-avatar');
 
     // Navigation Logic
     const showScreen = (id) => {
@@ -19,40 +55,110 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     logEntryBtn.addEventListener('click', () => {
-        dailyForm.reset(); // Clear previous selections
-        // default date to today
+        dailyForm.reset();
         const dateInput = document.getElementById('entry-date');
         const todayStr = new Date().toISOString().split('T')[0];
         if (dateInput) dateInput.value = todayStr;
-        // load existing entry for today (if any)
         loadEntryToForm(todayStr);
         showScreen('form');
     });
     backToDashBtn.addEventListener('click', () => showScreen('dashboard'));
 
-    // Data Management
+    // --- Data Management (Hybrid: Firebase + LocalStorage Fallback) ---
+
     const getEntries = () => {
+        // If logged in, use cache from Firestore
+        if (currentUser) {
+            return entriesCache;
+        }
+        // Fallback to local storage for offline/logged-out
         try {
-            const rawEntries = JSON.parse(localStorage.getItem('midnight_entries') || '[]');
-            return rawEntries;
+            return JSON.parse(localStorage.getItem('midnight_entries') || '[]');
         } catch (e) {
             console.error("Error reading from localStorage", e);
             return [];
         }
     };
 
-    const saveEntry = (entry) => {
-        const entries = getEntries();
-        const index = entries.findIndex(e => e.date === entry.date);
-        if (index > -1) entries[index] = entry;
-        else entries.push(entry);
-
-        localStorage.setItem('midnight_entries', JSON.stringify(entries));
-        updateDashboard('yesterday');
+    const saveEntry = async (entry) => {
+        if (currentUser) {
+            // Save to Firestore
+            try {
+                await setDoc(doc(db, "users", currentUser.uid, "entries", entry.date), entry);
+                // No need to manually push to entriesCache, onSnapshot will handle it
+                console.log("Saved to Firestore");
+            } catch (e) {
+                console.error("Error saving to Firestore", e);
+                alert("Failed to save to cloud: " + e.message);
+            }
+        } else {
+            // Save to LocalStorage
+            const entries = getEntries();
+            const index = entries.findIndex(e => e.date === entry.date);
+            if (index > -1) entries[index] = entry;
+            else entries.push(entry);
+            localStorage.setItem('midnight_entries', JSON.stringify(entries));
+            updateDashboard(); // Local update
+        }
     };
 
-    // UI Updates
+    // --- Authentication Logic ---
+
+    loginBtn.addEventListener('click', () => {
+        signInWithPopup(auth, provider).catch((error) => {
+            console.error("Login failed", error);
+            alert("Login failed: " + error.message);
+        });
+    });
+
+    logoutBtn.addEventListener('click', () => {
+        signOut(auth).then(() => {
+            console.log("Logged out");
+        });
+    });
+
+    onAuthStateChanged(auth, (user) => {
+        currentUser = user;
+        if (user) {
+            // UI Updates
+            loginBtn.style.display = 'none';
+            userInfo.style.display = 'flex';
+            logEntryBtn.style.display = 'block'; // Show entry button
+            userNameDisplay.textContent = user.displayName;
+            userAvatar.src = user.photoURL;
+
+            // Subscribe to Firestore
+            const colRef = collection(db, "users", user.uid, "entries");
+            unsubscribeValues = onSnapshot(colRef, (snapshot) => {
+                entriesCache = snapshot.docs.map(doc => doc.data());
+                updateDashboard();
+            });
+
+        } else {
+            // UI Updates
+            loginBtn.style.display = 'block';
+            userInfo.style.display = 'none';
+            // Optional: Hide entry button if you want to force login, 
+            // but for now let's allow local usage:
+            logEntryBtn.style.display = 'block';
+
+            // Clear cache & unsubscribe
+            if (unsubscribeValues) unsubscribeValues();
+            entriesCache = [];
+
+            // Render view from LocalStorage
+            updateDashboard();
+        }
+    });
+
+    // --- Existing UI Logic Below ---
+
     const updateDashboard = (range = 'yesterday') => {
+        // Find active tab if not passed explicitly in a way that overrides (simplified here)
+        // Check active button
+        const activeBtn = document.querySelector('.tab-btn.active');
+        if (activeBtn) range = activeBtn.dataset.range;
+
         const entries = getEntries();
         const todayStr = new Date().toISOString().split('T')[0];
 
@@ -70,20 +176,16 @@ document.addEventListener('DOMContentLoaded', () => {
             boiledDaal: false, teaCoffee: false, news: false, situationPractice: false, mathsAptitude: false
         };
 
-        // Show/hide elements based on range
         const categoryCardsContainer = document.getElementById('category-summary');
         const chartContainer = document.querySelector('.chart-container');
         const rangeMetrics = document.getElementById('range-metrics-container');
-
         const missedHabitsSection = document.getElementById('missed-habits-section');
 
         if (range === 'yesterday') {
-            // Show boxes, hide heatmap and range metrics
             categoryCardsContainer.style.display = 'grid';
             chartContainer.style.display = 'none';
             rangeMetrics.style.display = 'none';
-            rangeMetrics.style.display = 'none';
-            // hide mini meters for yesterday
+
             chartContainer.classList && chartContainer.classList.remove('show-mini');
             const bioCharts = document.getElementById('biometric-charts');
             if (bioCharts) bioCharts.style.display = 'none';
@@ -91,19 +193,16 @@ document.addEventListener('DOMContentLoaded', () => {
             renderSummaryCards(targetEntry);
             renderAIIntelligenceReport(targetEntry);
         } else {
-            // Show heatmap and range metrics, hide boxes
             categoryCardsContainer.style.display = 'none';
             chartContainer.style.display = 'block';
             rangeMetrics.style.display = 'flex';
-            // show mini meters for weekly/monthly
+
             chartContainer.classList && chartContainer.classList.add('show-mini');
-            // Show biometric charts
             const bioCharts = document.getElementById('biometric-charts');
             if (bioCharts) bioCharts.style.display = 'flex';
 
             if (missedHabitsSection) missedHabitsSection.style.display = 'none';
 
-            // Calculate range metrics
             calculateRangePerformance(entries, range);
             renderBiometricCharts(entries, range);
         }
@@ -146,6 +245,7 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     const updateRangeMeters = (discipline, consistency) => {
+        // Update both main and mini meters (if present)
         const dFill = document.getElementById('discipline-meter-fill');
         const cFill = document.getElementById('consistency-meter-fill');
         const dVal = document.getElementById('discipline-val');
@@ -156,7 +256,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (dVal) dVal.textContent = `${discipline}%`;
         if (cVal) cVal.textContent = `${consistency}%`;
 
-        // update mini meters if present
         const mdFill = document.getElementById('mini-discipline-meter-fill');
         const mcFill = document.getElementById('mini-consistency-meter-fill');
         const mdVal = document.getElementById('mini-discipline-val');
@@ -173,17 +272,14 @@ document.addEventListener('DOMContentLoaded', () => {
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
         const recentEntries = entries.filter(e => new Date(e.date) >= thirtyDaysAgo);
 
-        // Consistency = % of days with at least one 'true' habit
         const loggedDays = recentEntries.length;
         const consistency = Math.round((loggedDays / 30) * 100);
 
-        // Calculate current streak
         const sorted = [...entries].sort((a, b) => new Date(b.date) - new Date(a.date));
         let streak = 0;
         let checkDate = new Date();
         checkDate.setHours(0, 0, 0, 0);
 
-        // If today isn't logged, start check from yesterday
         const todayStr = checkDate.toISOString().split('T')[0];
         if (!sorted.find(e => e.date === todayStr)) {
             checkDate.setDate(checkDate.getDate() - 1);
@@ -318,10 +414,8 @@ document.addEventListener('DOMContentLoaded', () => {
         const container = document.getElementById('heatmapContainer');
         container.innerHTML = '';
 
-        // Determine the number of days to display based on range
         const daysCount = range === 'yesterday' ? 7 : (range === 'weekly' ? 7 : 30);
 
-        // Generate date labels
         const dateLabels = [];
         const today = new Date();
         for (let i = daysCount - 1; i >= 0; i--) {
@@ -330,9 +424,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dateLabels.push(d.toISOString().split('T')[0]);
         }
 
-        // Core areas configuration with sections
         const coreAreas = [
-            // Night Log
             { key: null, label: '🌙 NIGHT LOG', isHeader: true },
             { key: 'reading', label: 'Reading' },
             { key: 'meditation', label: 'Meditation' },
@@ -342,7 +434,6 @@ document.addEventListener('DOMContentLoaded', () => {
             { key: 'dayPills', label: 'Day Pills' },
             { key: 'soakedNutrishot', label: 'Soaked Nutrishot' },
             { key: 'water3Ltrs', label: '3L Water' },
-            // Day Log
             { key: null, label: '☀️ DAY LOG', isHeader: true },
             { key: 'workout', label: 'Workout' },
             { key: 'brushTeeth', label: 'Brush Teeth' },
@@ -355,14 +446,11 @@ document.addEventListener('DOMContentLoaded', () => {
             { key: 'mathsAptitude', label: 'Maths/Aptitude' }
         ];
 
-        // Create tooltip element
         const tooltip = document.createElement('div');
         tooltip.className = 'heatmap-tooltip';
         document.body.appendChild(tooltip);
 
-        // Create heatmap rows
         coreAreas.forEach(area => {
-            // If it's a header row, create a section header
             if (area.isHeader) {
                 const headerRow = document.createElement('div');
                 headerRow.className = 'heatmap-section-header';
@@ -372,33 +460,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             const row = document.createElement('div');
             row.className = 'heatmap-row';
-
-            // Label
             const label = document.createElement('div');
             label.className = 'heatmap-label';
             label.textContent = area.label;
             row.appendChild(label);
 
-            // Cells container
             const cellsContainer = document.createElement('div');
             cellsContainer.className = 'heatmap-cells';
 
             dateLabels.forEach(date => {
                 const cell = document.createElement('div');
                 cell.className = 'heatmap-cell';
-
                 const entry = entries.find(e => e.date === date);
                 const value = entry && entry[area.key] === true ? 'yes' : (entry ? 'no' : 'empty');
                 cell.classList.add(value);
 
-                // Tooltip on hover
                 cell.addEventListener('mouseenter', (e) => {
                     const d = new Date(date);
                     const dateStr = d.toLocaleDateString('en-US', {
-                        weekday: 'short',
-                        month: 'short',
-                        day: 'numeric',
-                        year: 'numeric'
+                        weekday: 'short', month: 'short', day: 'numeric', year: 'numeric'
                     });
                     const status = value === 'yes' ? 'YES ✓' : (value === 'no' ? 'NO ✗' : 'No Data');
                     tooltip.textContent = `${dateStr} - ${area.label}: ${status}`;
@@ -406,42 +486,32 @@ document.addEventListener('DOMContentLoaded', () => {
                     tooltip.style.left = e.pageX + 10 + 'px';
                     tooltip.style.top = e.pageY - 30 + 'px';
                 });
-
                 cell.addEventListener('mousemove', (e) => {
                     tooltip.style.left = e.pageX + 10 + 'px';
                     tooltip.style.top = e.pageY - 30 + 'px';
                 });
-
                 cell.addEventListener('mouseleave', () => {
                     tooltip.style.display = 'none';
                 });
 
                 cellsContainer.appendChild(cell);
             });
-
             row.appendChild(cellsContainer);
             container.appendChild(row);
         });
 
-        // Add date labels at the bottom
         const datesRow = document.createElement('div');
         datesRow.className = 'heatmap-dates';
-
-        // Show every nth date based on range to avoid crowding
         const skipInterval = 1;
-
         dateLabels.forEach((date, index) => {
             const dateDiv = document.createElement('div');
             dateDiv.className = 'heatmap-date';
-
             if (index % skipInterval === 0 || index === dateLabels.length - 1) {
                 const d = new Date(date);
                 dateDiv.textContent = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
             }
-
             datesRow.appendChild(dateDiv);
         });
-
         container.appendChild(datesRow);
         container.appendChild(datesRow);
     };
@@ -449,10 +519,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const renderBiometricCharts = (entries, range) => {
         const weightCanvas = document.getElementById('weightChart');
         const waistCanvas = document.getElementById('waistChart');
-
         if (!weightCanvas || !waistCanvas) return;
 
-        // Destroy existing charts if they exist
         if (window.weightChartInstance) window.weightChartInstance.destroy();
         if (window.waistChartInstance) window.waistChartInstance.destroy();
 
@@ -467,7 +535,6 @@ document.addEventListener('DOMContentLoaded', () => {
             d.setDate(d.getDate() - i);
             const dateStr = d.toISOString().split('T')[0];
             labels.push(d.toLocaleDateString('en-US', { day: 'numeric', month: 'short' }));
-
             const entry = entries.find(e => e.date === dateStr);
             weightData.push(entry && entry.weight ? entry.weight : null);
             waistData.push(entry && entry.waist ? entry.waist : null);
@@ -481,74 +548,49 @@ document.addEventListener('DOMContentLoaded', () => {
                 tooltip: {
                     enabled: true,
                     backgroundColor: 'rgba(0,0,0,0.8)',
-                    titleColor: '#fff',
-                    bodyColor: '#fff',
-                    displayColors: false
+                    titleColor: '#fff', bodyColor: '#fff', displayColors: false
                 }
             },
             scales: {
                 x: { display: false },
-                y: {
-                    display: true,
-                    grid: { color: 'rgba(255,255,255,0.1)' },
-                    ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 9 } }
-                }
+                y: { display: true, grid: { color: 'rgba(255,255,255,0.1)' }, ticks: { color: 'rgba(255,255,255,0.5)', font: { size: 9 } } }
             },
-            elements: {
-                point: { radius: 2, hitRadius: 10 },
-                line: { tension: 0.4, borderWidth: 2 }
-            }
+            elements: { point: { radius: 2, hitRadius: 10 }, line: { tension: 0.4, borderWidth: 2 } }
         };
 
-        // Render Weight Chart
         window.weightChartInstance = new Chart(weightCanvas, {
             type: 'line',
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Weight',
-                    data: weightData,
-                    borderColor: '#2979ff', // Blue
-                    backgroundColor: 'rgba(41, 121, 255, 0.1)',
-                    fill: true,
-                    spanGaps: true
+                    label: 'Weight', data: weightData,
+                    borderColor: '#2979ff', backgroundColor: 'rgba(41, 121, 255, 0.1)',
+                    fill: true, spanGaps: true
                 }]
             },
-            options: {
-                ...commonOptions,
-                plugins: { ...commonOptions.plugins, title: { display: true, text: 'Weight', color: '#aaa', font: { size: 10 } } }
-            }
+            options: { ...commonOptions, plugins: { ...commonOptions.plugins, title: { display: true, text: 'Weight', color: '#aaa', font: { size: 10 } } } }
         });
 
-        // Render Waist Chart
         window.waistChartInstance = new Chart(waistCanvas, {
             type: 'line',
             data: {
                 labels: labels,
                 datasets: [{
-                    label: 'Waist',
-                    data: waistData,
-                    borderColor: '#ff9100', // Orange
-                    backgroundColor: 'rgba(255, 145, 0, 0.1)',
-                    fill: true,
-                    spanGaps: true
+                    label: 'Waist', data: waistData,
+                    borderColor: '#ff9100', backgroundColor: 'rgba(255, 145, 0, 0.1)',
+                    fill: true, spanGaps: true
                 }]
             },
-            options: {
-                ...commonOptions,
-                plugins: { ...commonOptions.plugins, title: { display: true, text: 'Waist', color: '#aaa', font: { size: 10 } } }
-            }
+            options: { ...commonOptions, plugins: { ...commonOptions.plugins, title: { display: true, text: 'Waist', color: '#aaa', font: { size: 10 } } } }
         });
     };
 
-    // Form Event Handler
     dailyForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const formData = new FormData(dailyForm);
         const selectedDate = formData.get('entryDate') || new Date().toISOString().split('T')[0];
         const entry = {
             date: selectedDate,
-            // Night Log
             reading: formData.get('reading') === 'true',
             meditation: formData.get('meditation') === 'true',
             facialMassage: formData.get('facialMassage') === 'true',
@@ -557,7 +599,6 @@ document.addEventListener('DOMContentLoaded', () => {
             dayPills: formData.get('dayPills') === 'true',
             soakedNutrishot: formData.get('soakedNutrishot') === 'true',
             water3Ltrs: formData.get('water3Ltrs') === 'true',
-            // Day Log
             workout: formData.get('workout') === 'true',
             brushTeeth: formData.get('brushTeeth') === 'true',
             bath: formData.get('bath') === 'true',
@@ -576,99 +617,26 @@ document.addEventListener('DOMContentLoaded', () => {
         showScreen('dashboard');
     });
 
-    // Collect current form values into an entry object (without saving)
-    const getCurrentFormEntry = () => {
-        const formData = new FormData(dailyForm);
-        const selectedDate = formData.get('entryDate') || new Date().toISOString().split('T')[0];
-        const entry = { date: selectedDate };
-        Object.keys(habitData).forEach(k => {
-            entry[k] = formData.get(k) === 'true';
-        });
-        entry.notes = formData.get('notes');
-        return entry;
-    };
-
-    // Sync entry to Google Sheets via Apps Script web app endpoint
-    const syncToGoogleSheet = async (entry) => {
-        try {
-            // Default to the user's Web App endpoint, allow user to override
-            let endpoint = localStorage.getItem('sheetsEndpoint') || 'https://script.google.com/macros/s/AKfycbycuXi5fjPFYCtqBKOTuOrnsRNAdhBoFZn5otC9njiaoL2x_rJb2iJqOJN3H7DY3zb_/exec';
-            const useDefault = window.confirm('Use default Google Apps Script endpoint? (Cancel to provide a custom URL)');
-            if (!useDefault) {
-                const customEndpoint = window.prompt('Enter your custom Apps Script Web App URL (must be a Web App deployment, not a library):');
-                if (!customEndpoint) return;
-                endpoint = customEndpoint;
-            }
-            localStorage.setItem('sheetsEndpoint', endpoint);
-
-            console.log('Syncing to endpoint:', endpoint);
-            const res = await fetch(endpoint, {
-                method: 'POST',
-                mode: 'cors',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(entry)
-            });
-
-            let data = {};
-            try {
-                data = await res.json();
-            } catch (e) {
-                data = { success: res.ok };
-            }
-
-            if (!res.ok && !data.success) {
-                throw new Error(data.error || `Server returned ${res.status}: ${res.statusText}`);
-            }
-            alert('✓ Synced successfully to Google Sheet.');
-        } catch (err) {
-            console.error('Sync error details:', err);
-            const msg = err.message || String(err);
-            // Provide troubleshooting hint
-            let hint = '';
-            if (msg.includes('CORS') || msg.includes('fetch')) {
-                hint = '\n\nTroubleshooting: Make sure your Apps Script is deployed as a Web App (not a library), and access is set to "Anyone".';
-            }
-            alert('Sync failed: ' + msg + hint);
-        }
-    };
-
-    // Wire up Sync button
-    const syncBtn = document.getElementById('sync-to-sheet-btn');
-    if (syncBtn) {
-        syncBtn.addEventListener('click', () => {
-            const entry = getCurrentFormEntry();
-            // Save locally first for consistency
-            saveEntry(entry);
-            syncToGoogleSheet(entry);
-        });
-    }
-
-    // Initial Setup
     const updateTimeContext = () => {
         const hr = new Date().getHours();
         if (hr < 12) greeting.textContent = "Good Morning, Shubham";
         else if (hr < 18) greeting.textContent = "Good Afternoon, Shubham";
         else greeting.textContent = "Good Evening, Shubham";
-
         currentDateDisplay.textContent = new Date().toLocaleDateString(undefined, {
             weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
         });
     };
 
-    // Load an entry into the form (used when user picks a date)
     const loadEntryToForm = (dateStr) => {
         const entries = getEntries();
         const entry = entries.find(e => e.date === dateStr);
-        // clear radios to default 'false'
         if (!entry) {
             dailyForm.reset();
-            // ensure date remains selected
             const dateInput = document.getElementById('entry-date');
             if (dateInput) dateInput.value = dateStr;
             return;
         }
 
-        // populate form fields
         Object.keys(habitData).forEach(key => {
             const yesInput = document.querySelector(`#daily-form input[name="${key}"][value="true"]`);
             const noInput = document.querySelector(`#daily-form input[name="${key}"][value="false"]`);
@@ -682,14 +650,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const dateInput = document.getElementById('entry-date');
         if (dateInput) dateInput.value = dateStr;
 
-        // Biometrics
         const weightInput = document.getElementById('weight-input');
         const waistInput = document.getElementById('waist-input');
         if (weightInput) weightInput.value = entry.weight || '';
         if (waistInput) waistInput.value = entry.waist || '';
     };
 
-    // When date field changes, load saved entry for that date
     const dateField = document.getElementById('entry-date');
     if (dateField) {
         dateField.addEventListener('change', (e) => {
@@ -708,20 +674,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateTimeContext();
     updateDashboard();
-    // Register service worker for PWA + push support
+
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('service-worker.js').then(() => {
-            console.log('Service worker registered');
-        }).catch(err => console.warn('SW registration failed', err));
+        navigator.serviceWorker.register('service-worker.js').catch(err => console.warn('SW registration failed', err));
     }
 
-    // Enable reminders button: request Notification permission
     const enableRemBtn = document.getElementById('enable-reminders-btn');
     if (enableRemBtn) {
         enableRemBtn.addEventListener('click', async () => {
-            if (!('Notification' in window)) return alert('Notifications not supported in this browser.');
+            if (!('Notification' in window)) return alert('Notifications not supported.');
             const perm = await Notification.requestPermission();
-            if (perm === 'granted') alert('Notifications enabled. To receive push reminders you will need to configure a push server (e.g., Firebase). See README.');
+            if (perm === 'granted') alert('Notifications enabled.');
             else alert('Notifications not granted.');
         });
     }
