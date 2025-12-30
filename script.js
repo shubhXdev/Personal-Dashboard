@@ -105,9 +105,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Authentication Logic ---
 
     loginBtn.addEventListener('click', () => {
+        console.log("Attempting login from domain:", window.location.hostname);
+        console.log("Firebase Auth Domain:", firebaseConfig.authDomain);
         signInWithPopup(auth, provider).catch((error) => {
-            console.error("Login failed", error);
-            alert("Login failed: " + error.message);
+            console.error("Login failed full object:", error);
+            alert(`Login failed: ${error.code}\nDomain detected: ${window.location.hostname}\nMessage: ${error.message}`);
         });
     });
 
